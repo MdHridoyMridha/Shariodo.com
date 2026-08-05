@@ -24,7 +24,8 @@ export default function Login() {
       setError(authError.message);
       setLoading(false);
     } else {
-      if (email.toLowerCase() === 'hridoyhs369@gmail.com') {
+      const adminEmails = ['hridoyhs369@gmail.com', 'hsshathi3@gmail.com'];
+      if (adminEmails.includes(email.toLowerCase())) {
         navigate('/admin');
       } else {
         navigate('/');
@@ -32,8 +33,8 @@ export default function Login() {
     }
   };
 
-  const fillAdminCredentials = () => {
-    setEmail('hridoyhs369@gmail.com');
+  const fillAdminCredentials = (targetEmail: string) => {
+    setEmail(targetEmail);
     setPassword('admin123');
   };
 
@@ -94,13 +95,20 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="pt-2 border-t border-neutral-100 text-center">
+        <div className="pt-2 border-t border-neutral-100 flex flex-col sm:flex-row items-center justify-center gap-2">
           <button
             type="button"
-            onClick={fillAdminCredentials}
-            className="px-3 py-1.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-[11px] font-bold hover:bg-amber-100 transition-all"
+            onClick={() => fillAdminCredentials('hridoyhs369@gmail.com')}
+            className="px-2.5 py-1.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-[11px] font-bold hover:bg-amber-100 transition-all"
           >
-            🔑 Fill Admin Email (hridoyhs369@gmail.com)
+            🔑 Fill Admin (hridoyhs369)
+          </button>
+          <button
+            type="button"
+            onClick={() => fillAdminCredentials('hsshathi3@gmail.com')}
+            className="px-2.5 py-1.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-[11px] font-bold hover:bg-amber-100 transition-all"
+          >
+            🔑 Fill Admin (hsshathi3)
           </button>
         </div>
 

@@ -66,8 +66,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = (data: any) => supabase.auth.signInWithPassword(data);
   const signOut = () => supabase.auth.signOut();
 
+  const adminEmails = ['hridoyhs369@gmail.com', 'hsshathi3@gmail.com'];
   const isAdmin = Boolean(
-    (user?.email && user.email.toLowerCase() === 'hridoyhs369@gmail.com') ||
+    (user?.email && adminEmails.includes(user.email.toLowerCase())) ||
       profile?.role === 'admin'
   );
 

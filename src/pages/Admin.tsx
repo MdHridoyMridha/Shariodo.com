@@ -99,10 +99,10 @@ export default function Admin() {
   };
 
   // SQL Script to share with user
-  const sqlScript = `-- SHARIDO FULL DATABASE SCHEMA & ADMIN SECURITY POLICIES
--- Paste into Supabase SQL Editor: https://supabase.com/dashboard/project/_/sql
+  const sqlScript = `-- SHARIDO FULL DATABASE SCHEMA & MULTI-ADMIN SETUP
+-- Paste this script into your Supabase SQL Editor: https://supabase.com/dashboard/project/_/sql
 
--- 1. Profiles Table & Admin Role
+-- 1. PROFILES TABLE
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT,
@@ -110,19 +110,68 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   role TEXT DEFAULT 'customer',
   phone TEXT,
   address TEXT,
+  avatar_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public profiles read" ON public.profiles;
+DROP POLICY IF EXISTS "Users update own profile" ON public.profiles;
+
 CREATE POLICY "Public profiles read" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Users update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
--- Assign Admin Role to hridoyhs369@gmail.com
+-- Trigger to auto-create profile on Auth Signup & set Admin role for designated emails
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, full_name, email, role)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', SPLIT_PART(NEW.email, '@', 1)),
+    NEW.email,
+    CASE 
+      WHEN LOWER(NEW.email) IN ('hridoyhs369@gmail.com', 'hsshathi3@gmail.com') THEN 'admin'
+      ELSE 'customer'
+    END
+  )
+  ON CONFLICT (id) DO UPDATE 
+  SET email = EXCLUDED.email,
+      role = CASE 
+        WHEN LOWER(EXCLUDED.email) IN ('hridoyhs369@gmail.com', 'hsshathi3@gmail.com') THEN 'admin'
+        ELSE public.profiles.role
+      END;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Update existing profiles for both Admin emails
 UPDATE public.profiles 
 SET role = 'admin' 
-WHERE email = 'hridoyhs369@gmail.com';
+WHERE LOWER(email) IN ('hridoyhs369@gmail.com', 'hsshathi3@gmail.com');
 
--- 2. Products Table
+-- 2. CATEGORIES TABLE
+CREATE TABLE IF NOT EXISTS public.categories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  description TEXT,
+  image_url TEXT,
+  icon_name TEXT DEFAULT 'Sparkles',
+  display_order INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public view categories" ON public.categories;
+CREATE POLICY "Public view categories" ON public.categories FOR SELECT USING (true);
+
+-- 3. PRODUCTS TABLE
 CREATE TABLE IF NOT EXISTS public.products (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -145,10 +194,13 @@ CREATE TABLE IF NOT EXISTS public.products (
 );
 
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public view products" ON public.products;
+DROP POLICY IF EXISTS "Admin full access products" ON public.products;
+
 CREATE POLICY "Public view products" ON public.products FOR SELECT USING (true);
 CREATE POLICY "Admin full access products" ON public.products FOR ALL USING (true);
 
--- 3. Orders & Order Items
+-- 4. ORDERS & ORDER ITEMS
 CREATE TABLE IF NOT EXISTS public.orders (
   id TEXT PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -174,6 +226,9 @@ CREATE TABLE IF NOT EXISTS public.order_items (
 
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read/write orders" ON public.orders;
+DROP POLICY IF EXISTS "Public read/write order_items" ON public.order_items;
 
 CREATE POLICY "Public read/write orders" ON public.orders FOR ALL USING (true);
 CREATE POLICY "Public read/write order_items" ON public.order_items FOR ALL USING (true);
@@ -247,7 +302,7 @@ CREATE POLICY "Public read/write order_items" ON public.order_items FOR ALL USIN
           <div className="space-y-2">
             <h1 className="text-2xl font-black text-[#1F1C18]">Admin Access Required</h1>
             <p className="text-xs text-[#787166] leading-relaxed">
-              Log in with <strong className="text-amber-900">hridoyhs369@gmail.com</strong> to access the administrator dashboard, edit inventory, and process orders.
+              Log in with <strong className="text-amber-900">hridoyhs369@gmail.com</strong> or <strong className="text-amber-900">hsshathi3@gmail.com</strong> to access the administrator dashboard, edit inventory, and process orders.
             </p>
           </div>
 
@@ -255,21 +310,37 @@ CREATE POLICY "Public read/write order_items" ON public.order_items FOR ALL USIN
             <div className="p-4 bg-[#FAF8F5] rounded-2xl border border-[#E8E4DC] text-xs space-y-3">
               <p className="text-neutral-500 font-semibold">Currently signed in as:</p>
               <p className="font-bold text-neutral-900 truncate">{user.email}</p>
-              <p className="text-[11px] text-amber-800 font-semibold">Click below to switch to the admin account instantly:</p>
-              <button
-                onClick={() => signIn({ email: 'hridoyhs369@gmail.com', password: 'password123' })}
-                className="w-full py-3 bg-[#8C6D33] text-white rounded-xl font-black text-xs hover:bg-[#735828] transition-all shadow-md flex items-center justify-center gap-2"
-              >
-                <ShieldCheck size={16} /> Switch to Admin Account (hridoyhs369@gmail.com)
-              </button>
+              <p className="text-[11px] text-amber-800 font-semibold">Switch to an admin account:</p>
+              <div className="space-y-2">
+                <button
+                  onClick={() => signIn({ email: 'hridoyhs369@gmail.com', password: 'password123' })}
+                  className="w-full py-2.5 bg-[#8C6D33] text-white rounded-xl font-black text-xs hover:bg-[#735828] transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  <ShieldCheck size={15} /> Sign In as hridoyhs369@gmail.com
+                </button>
+                <button
+                  onClick={() => signIn({ email: 'hsshathi3@gmail.com', password: 'password123' })}
+                  className="w-full py-2.5 bg-[#8C6D33] text-white rounded-xl font-black text-xs hover:bg-[#735828] transition-all shadow-md flex items-center justify-center gap-2"
+                >
+                  <ShieldCheck size={15} /> Sign In as hsshathi3@gmail.com
+                </button>
+              </div>
             </div>
           ) : (
-            <button
-              onClick={() => signIn({ email: 'hridoyhs369@gmail.com', password: 'password123' })}
-              className="w-full py-3.5 bg-[#8C6D33] text-white rounded-xl font-black text-xs hover:bg-[#735828] transition-all shadow-md flex items-center justify-center gap-2 active:scale-95"
-            >
-              <ShieldCheck size={16} /> 1-Click Sign In as Admin (hridoyhs369@gmail.com)
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={() => signIn({ email: 'hridoyhs369@gmail.com', password: 'password123' })}
+                className="w-full py-3 bg-[#8C6D33] text-white rounded-xl font-black text-xs hover:bg-[#735828] transition-all shadow-md flex items-center justify-center gap-2 active:scale-95"
+              >
+                <ShieldCheck size={16} /> Sign In as hridoyhs369@gmail.com
+              </button>
+              <button
+                onClick={() => signIn({ email: 'hsshathi3@gmail.com', password: 'password123' })}
+                className="w-full py-3 bg-[#8C6D33] text-white rounded-xl font-black text-xs hover:bg-[#735828] transition-all shadow-md flex items-center justify-center gap-2 active:scale-95"
+              >
+                <ShieldCheck size={16} /> Sign In as hsshathi3@gmail.com
+              </button>
+            </div>
           )}
         </div>
       </div>
